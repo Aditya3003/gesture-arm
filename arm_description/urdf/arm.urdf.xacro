@@ -1,160 +1,119 @@
 <?xml version="1.0"?>
-<robot name="arm">
+<robot name="arm" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-    <!--MATERIALS-->
-    <material name="black">
-        <color rgba="0 0 0 1"/>
-    </material>
-    <material name="white">
-        <color rgba="1 1 1 1"/>
-    </material>
+  <!-- ===== PROPERTIES ===== -->
+  <!-- Arm -->
+  <xacro:property name="segment_length" value="1.3"/>   <!-- distance between two joints -->
+  <xacro:property name="link_length"    value="1.0"/>   <!-- length of each cylinder -->
+  <xacro:property name="link_radius"    value="0.1"/>
+  <xacro:property name="joint_radius"   value="0.2"/>   <!-- sphere at each joint -->
+  <xacro:property name="joint_limit"    value="1.3"/>   <!-- rad, symmetric: -limit to +limit -->
+  <xacro:property name="joint_effort"   value="10"/>
+  <xacro:property name="joint_velocity" value="1"/>
 
-    <!--BODY-->
-    <link name="base_link">
+  <!-- Gripper -->
+  <xacro:property name="hand_offset"     value="1.1"/>  <!-- hand position along link3 -->
+  <xacro:property name="hand_x"          value="0.2"/>
+  <xacro:property name="hand_y"          value="0.5"/>
+  <xacro:property name="hand_z"          value="0.2"/>
+  <xacro:property name="finger_x"        value="0.1"/>
+  <xacro:property name="finger_y"        value="0.1"/>
+  <xacro:property name="finger_z"        value="0.4"/>
+  <xacro:property name="finger_spacing"  value="0.18"/> <!-- distance of each finger from the center -->
+  <xacro:property name="finger_height"   value="0.3"/>
+  <xacro:property name="finger_travel"   value="0.13"/> <!-- how far each finger closes -->
+
+  <!-- ===== MATERIALS ===== -->
+  <material name="black">
+    <color rgba="0 0 0 1"/>
+  </material>
+  <material name="white">
+    <color rgba="1 1 1 1"/>
+  </material>
+
+  <!-- ===== MACROS ===== -->
+  <!-- One arm segment: a cylinder, an optional sphere at its top, and the revolute joint that drives it -->
+  <xacro:macro name="arm_segment" params="index parent joint_z top_sphere">
+    <link name="link${index}">
+      <visual>
+        <geometry>
+          <cylinder length="${link_length}" radius="${link_radius}"/>
+        </geometry>
+        <origin xyz="0 0 ${segment_length/2}" rpy="0 0 0"/>
+        <material name="white"/>
+      </visual>
+      <xacro:if value="${top_sphere}">
         <visual>
-            <geometry>
-                <sphere radius="0.2"/>
-            </geometry>
-            <material name="black"/>
+          <geometry>
+            <sphere radius="${joint_radius}"/>
+          </geometry>
+          <origin xyz="0 0 ${segment_length}" rpy="0 0 0"/>
+          <material name="black"/>
         </visual>
+      </xacro:if>
     </link>
 
-    <link name="link1">
-        <visual>
-            <geometry>
-                <cylinder length="1.0" radius="0.1"/>
-            </geometry>
-            <origin rpy="0 0 0" xyz="0 0 0.65"/>
-            <material name="white"/>
-        </visual>
+    <joint name="joint${index}" type="revolute">
+      <parent link="${parent}"/>
+      <child link="link${index}"/>
+      <origin xyz="0 0 ${joint_z}" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+      <limit lower="${-joint_limit}" upper="${joint_limit}" effort="${joint_effort}" velocity="${joint_velocity}"/>
+    </joint>
+  </xacro:macro>
+
+  <!-- One gripper finger. reflect = 1 for left, -1 for right -->
+  <xacro:macro name="finger" params="side reflect">
+    <link name="gripper_finger_${side}">
+      <visual>
+        <geometry>
+          <box size="${finger_x} ${finger_y} ${finger_z}"/>
+        </geometry>
+        <origin xyz="0 ${reflect*finger_spacing} ${finger_height}" rpy="0 0 0"/>
+        <material name="white"/>
+      </visual>
     </link>
 
-    <joint name="joint1" type="revolute">
-        <parent link="base_link"/>
-        <child link="link1"/>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-        <axis xyz="0 1 0"/>
-        <limit lower="-1.3" upper="1.3" effort="10" velocity="1"/>
+    <joint name="gripper_finger_${side}_joint" type="prismatic">
+      <parent link="gripper_hand"/>
+      <child link="gripper_finger_${side}"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <axis xyz="0 ${-reflect} 0"/>
+      <limit lower="0" upper="${finger_travel}" effort="${joint_effort}" velocity="${joint_velocity}"/>
     </joint>
+  </xacro:macro>
 
-    <link name ="link1_to_joint2">
-        <visual>
-            <geometry>
-                <sphere radius="0.2"/>
-            </geometry>
-            <origin rpy="0 0 0" xyz="0 0 1.3"/>
-            <material name="black"/>
-        </visual>
-    </link>
+  <!-- ===== ROBOT ===== -->
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <sphere radius="${joint_radius}"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+  </link>
 
-    <joint name="joint2_to_link2" type="fixed">
-        <parent link="link1"/>
-        <child link="link1_to_joint2"/>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-    </joint>
+  <xacro:arm_segment index="1" parent="base_link" joint_z="0"                 top_sphere="true"/>
+  <xacro:arm_segment index="2" parent="link1"     joint_z="${segment_length}" top_sphere="true"/>
+  <xacro:arm_segment index="3" parent="link2"     joint_z="${segment_length}" top_sphere="false"/>
 
-    <link name="link2">
-        <visual>
-            <geometry>
-                <cylinder length="1.0" radius="0.1"/>
-            </geometry>
-            <origin rpy="0 0 0" xyz="0 0 0.65"/>
-            <material name="white"/>
-        </visual>
-    </link>
+  <link name="gripper_hand">
+    <visual>
+      <geometry>
+        <box size="${hand_x} ${hand_y} ${hand_z}"/>
+      </geometry>
+      <origin xyz="0 0 ${hand_z/2}" rpy="0 0 0"/>
+      <material name="black"/>
+    </visual>
+  </link>
 
-    <joint name="joint2" type="revolute">
-        <parent link="link1_to_joint2"/>
-        <child link="link2"/>
-        <origin xyz="0 0 1.3" rpy="0 0 0"/>
-        <axis xyz="0 1 0"/>
-        <limit lower="-1.3" upper="1.3" effort="10" velocity="1"/>
-    </joint>
+  <joint name="gripper_joint" type="fixed">
+    <parent link="link3"/>
+    <child link="gripper_hand"/>
+    <origin xyz="0 0 ${hand_offset}" rpy="0 0 0"/>
+  </joint>
 
-    <link name ="link2_to_joint3">
-        <visual>
-            <geometry>
-                <sphere radius="0.2"/>
-            </geometry>
-            <origin rpy="0 0 0" xyz="0 0 1.3"/>
-            <material name="black"/>
-        </visual>
-    </link>
-
-    <joint name="joint3_to_link3" type="fixed">
-        <parent link="link2"/>
-        <child link="link2_to_joint3"/>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-    </joint>
-
-    <link name="link3">
-        <visual>
-            <geometry>
-                <cylinder length="1.0" radius="0.1"/>
-            </geometry>
-            <origin rpy="0 0 0" xyz="0 0 0.65"/>
-            <material name="white"/>
-        </visual>
-    </link>
-
-    <joint name="joint3" type="revolute">
-        <parent link="link2_to_joint3"/>
-        <child link="link3"/>
-        <origin xyz="0 0 1.3" rpy="0 0 0"/>
-        <axis xyz="0 1 0"/>
-        <limit lower="-1.3" upper="1.3" effort="10" velocity="1"/>
-    </joint>
-
-    <link name="gripper_hand"> 
-        <visual>
-            <geometry>
-                <box size="0.2 0.5 0.2"/>
-            </geometry>
-            <origin rpy="0 0 0" xyz="0 0 0.1"/>
-            <material name="black"/>
-        </visual>
-    </link>
-
-    <joint name="gripper_joint" type="fixed">
-        <parent link="link3"/>
-        <child link="gripper_hand"/>
-        <origin xyz="0 0 1.1" rpy="0 0 0"/>
-    </joint>
-
-    <link name="gripper_finger_left">
-        <visual>
-            <geometry>
-                <box size="0.1 0.1 0.4"/>
-            </geometry>
-            <origin rpy="0 0 0" xyz="0 0.18 0.3"/>
-            <material name="white"/>
-        </visual>
-    </link> 
-
-    <joint name="gripper_finger_left_joint" type="prismatic">
-        <parent link="gripper_hand"/>
-        <child link="gripper_finger_left"/>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-        <axis xyz="0 1 0"/>
-        <limit lower="-0.13" upper="0" effort="10" velocity="1"/>
-    </joint>
-
-    <link name="gripper_finger_right">
-        <visual>
-            <geometry>
-                <box size="0.1 0.1 0.4"/>
-            </geometry>
-            <origin rpy="0 0 0" xyz="0 -0.18 0.3"/>
-            <material name="white"/>
-        </visual>
-    </link>
-
-    <joint name="gripper_finger_right_joint" type="prismatic">
-        <parent link="gripper_hand"/>
-        <child link="gripper_finger_right"/>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-        <axis xyz="0 1 0"/>
-        <limit lower="0" upper="0.13" effort="10" velocity="1"/>
-    </joint>
+  <xacro:finger side="left"  reflect="1"/>
+  <xacro:finger side="right" reflect="-1"/>
 
 </robot>
