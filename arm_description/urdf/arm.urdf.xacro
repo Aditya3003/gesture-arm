@@ -3,25 +3,31 @@
 
   <!-- ===== PROPERTIES ===== -->
   <!-- Arm -->
-<xacro:property name="segment_length" value="0.3"/>
-<xacro:property name="link_length"    value="0.23"/>
-<xacro:property name="link_radius"    value="0.025"/>
-<xacro:property name="joint_radius"   value="0.045"/>
-<xacro:property name="joint_limit"    value="1.3"/>
-<xacro:property name="joint_effort"   value="10"/>
-<xacro:property name="joint_velocity" value="1"/>
+  <xacro:property name="segment_length" value="0.3"/>
+  <xacro:property name="link_length"    value="0.23"/>
+  <xacro:property name="link_radius"    value="0.025"/>
+  <xacro:property name="joint_radius"   value="0.045"/>
+  <xacro:property name="joint_limit"    value="1.3"/>
+  <xacro:property name="joint_effort"   value="10"/>
+  <xacro:property name="joint_velocity" value="1"/>
 
-<!-- Gripper -->
-<xacro:property name="hand_offset"     value="0.25"/>
-<xacro:property name="hand_x"          value="0.045"/>
-<xacro:property name="hand_y"          value="0.12"/>
-<xacro:property name="hand_z"          value="0.045"/>
-<xacro:property name="finger_x"        value="0.025"/>
-<xacro:property name="finger_y"        value="0.025"/>
-<xacro:property name="finger_z"        value="0.09"/>
-<xacro:property name="finger_spacing"  value="0.04"/>
-<xacro:property name="finger_height"   value="0.07"/>
-<xacro:property name="finger_travel"   value="0.027"/>
+  <!-- Gripper -->
+  <xacro:property name="hand_offset"     value="0.25"/>
+  <xacro:property name="hand_x"          value="0.045"/>
+  <xacro:property name="hand_y"          value="0.12"/>
+  <xacro:property name="hand_z"          value="0.045"/>
+  <xacro:property name="finger_x"        value="0.025"/>
+  <xacro:property name="finger_y"        value="0.025"/>
+  <xacro:property name="finger_z"        value="0.09"/>
+  <xacro:property name="finger_spacing"  value="0.04"/>
+  <xacro:property name="finger_height"   value="0.07"/>
+  <xacro:property name="finger_travel"   value="0.027"/>
+
+  <!-- Masses (kg) -->
+  <xacro:property name="base_mass"   value="1.0"/>
+  <xacro:property name="link_mass"   value="0.3"/>
+  <xacro:property name="hand_mass"   value="0.1"/>
+  <xacro:property name="finger_mass" value="0.05"/>
 
   <!-- ===== MATERIALS ===== -->
   <material name="black">
@@ -31,8 +37,38 @@
     <color rgba="1 1 1 1"/>
   </material>
 
-  <!-- ===== MACROS ===== -->
-  <!-- One arm segment: a cylinder, an optional sphere at its top, and the revolute joint that drives it -->
+  <!-- ===== INERTIA MACROS ===== -->
+  <xacro:macro name="inertial_box" params="mass x y z xyz">
+    <inertial>
+      <origin xyz="${xyz}" rpy="0 0 0"/>
+      <mass value="${mass}"/>
+      <inertia ixx="${mass*(y*y+z*z)/12}" ixy="0" ixz="0"
+               iyy="${mass*(x*x+z*z)/12}" iyz="0"
+               izz="${mass*(x*x+y*y)/12}"/>
+    </inertial>
+  </xacro:macro>
+
+  <xacro:macro name="inertial_cylinder" params="mass r h xyz">
+    <inertial>
+      <origin xyz="${xyz}" rpy="0 0 0"/>
+      <mass value="${mass}"/>
+      <inertia ixx="${mass*(3*r*r+h*h)/12}" ixy="0" ixz="0"
+               iyy="${mass*(3*r*r+h*h)/12}" iyz="0"
+               izz="${mass*r*r/2}"/>
+    </inertial>
+  </xacro:macro>
+
+  <xacro:macro name="inertial_sphere" params="mass r xyz">
+    <inertial>
+      <origin xyz="${xyz}" rpy="0 0 0"/>
+      <mass value="${mass}"/>
+      <inertia ixx="${2*mass*r*r/5}" ixy="0" ixz="0"
+               iyy="${2*mass*r*r/5}" iyz="0"
+               izz="${2*mass*r*r/5}"/>
+    </inertial>
+  </xacro:macro>
+
+  <!-- ===== ARM SEGMENT MACRO: cylinder, optional top sphere, and its revolute joint ===== -->
   <xacro:macro name="arm_segment" params="index parent joint_z top_sphere axis">
     <link name="link${index}">
       <visual>
@@ -42,6 +78,13 @@
         <origin xyz="0 0 ${segment_length/2}" rpy="0 0 0"/>
         <material name="white"/>
       </visual>
+      <collision>
+        <geometry>
+          <cylinder length="${link_length}" radius="${link_radius}"/>
+        </geometry>
+        <origin xyz="0 0 ${segment_length/2}" rpy="0 0 0"/>
+      </collision>
+
       <xacro:if value="${top_sphere}">
         <visual>
           <geometry>
@@ -50,7 +93,15 @@
           <origin xyz="0 0 ${segment_length}" rpy="0 0 0"/>
           <material name="black"/>
         </visual>
+        <collision>
+          <geometry>
+            <sphere radius="${joint_radius}"/>
+          </geometry>
+          <origin xyz="0 0 ${segment_length}" rpy="0 0 0"/>
+        </collision>
       </xacro:if>
+
+      <xacro:inertial_cylinder mass="${link_mass}" r="${link_radius}" h="${link_length}" xyz="0 0 ${segment_length/2}"/>
     </link>
 
     <joint name="joint${index}" type="revolute">
@@ -62,7 +113,7 @@
     </joint>
   </xacro:macro>
 
-  <!-- One gripper finger. reflect = 1 for left, -1 for right -->
+  <!-- ===== FINGER MACRO. reflect = 1 for left, -1 for right ===== -->
   <xacro:macro name="finger" params="side reflect">
     <link name="gripper_finger_${side}">
       <visual>
@@ -72,6 +123,13 @@
         <origin xyz="0 ${reflect*finger_spacing} ${finger_height}" rpy="0 0 0"/>
         <material name="white"/>
       </visual>
+      <collision>
+        <geometry>
+          <box size="${finger_x} ${finger_y} ${finger_z}"/>
+        </geometry>
+        <origin xyz="0 ${reflect*finger_spacing} ${finger_height}" rpy="0 0 0"/>
+      </collision>
+      <xacro:inertial_box mass="${finger_mass}" x="${finger_x}" y="${finger_y}" z="${finger_z}" xyz="0 ${reflect*finger_spacing} ${finger_height}"/>
     </link>
 
     <joint name="gripper_finger_${side}_joint" type="prismatic">
@@ -83,7 +141,19 @@
     </joint>
   </xacro:macro>
 
+  <!-- ===== ROS 2 CONTROL JOINT MACRO ===== -->
+  <xacro:macro name="control_joint" params="name">
+    <joint name="${name}">
+      <command_interface name="position"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+  </xacro:macro>
+
   <!-- ===== ROBOT ===== -->
+  <!-- World: pins the arm to the ground in Gazebo -->
+  <link name="world"/>
+
   <link name="base_link">
     <visual>
       <geometry>
@@ -91,10 +161,23 @@
       </geometry>
       <material name="black"/>
     </visual>
+    <collision>
+      <geometry>
+        <sphere radius="${joint_radius}"/>
+      </geometry>
+    </collision>
+    <xacro:inertial_sphere mass="${base_mass}" r="${joint_radius}" xyz="0 0 0"/>
   </link>
 
-  <xacro:arm_segment index="1" parent="base_link" joint_z="0"                 top_sphere="true" axis="0 0 1"/>
-  <xacro:arm_segment index="2" parent="link1"     joint_z="${segment_length}" top_sphere="true" axis="0 1 0"/>
+  <!-- Lifted by the sphere's radius so the base sits on the ground instead of half inside it -->
+  <joint name="world_to_base" type="fixed">
+    <parent link="world"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 ${joint_radius}" rpy="0 0 0"/>
+  </joint>
+
+  <xacro:arm_segment index="1" parent="base_link" joint_z="0"                 top_sphere="true"  axis="0 0 1"/>
+  <xacro:arm_segment index="2" parent="link1"     joint_z="${segment_length}" top_sphere="true"  axis="0 1 0"/>
   <xacro:arm_segment index="3" parent="link2"     joint_z="${segment_length}" top_sphere="false" axis="0 1 0"/>
 
   <link name="gripper_hand">
@@ -105,6 +188,13 @@
       <origin xyz="0 0 ${hand_z/2}" rpy="0 0 0"/>
       <material name="black"/>
     </visual>
+    <collision>
+      <geometry>
+        <box size="${hand_x} ${hand_y} ${hand_z}"/>
+      </geometry>
+      <origin xyz="0 0 ${hand_z/2}" rpy="0 0 0"/>
+    </collision>
+    <xacro:inertial_box mass="${hand_mass}" x="${hand_x}" y="${hand_y}" z="${hand_z}" xyz="0 0 ${hand_z/2}"/>
   </link>
 
   <joint name="gripper_joint" type="fixed">
@@ -115,5 +205,23 @@
 
   <xacro:finger side="left"  reflect="1"/>
   <xacro:finger side="right" reflect="-1"/>
+
+  <!-- ===== ROS 2 CONTROL ===== -->
+  <ros2_control name="GazeboSystem" type="system">
+    <hardware>
+      <plugin>gazebo_ros2_control/GazeboSystem</plugin>
+    </hardware>
+    <xacro:control_joint name="joint1"/>
+    <xacro:control_joint name="joint2"/>
+    <xacro:control_joint name="joint3"/>
+    <xacro:control_joint name="gripper_finger_left_joint"/>
+    <xacro:control_joint name="gripper_finger_right_joint"/>
+  </ros2_control>
+
+  <gazebo>
+    <plugin filename="libgazebo_ros2_control.so" name="gazebo_ros2_control">
+      <parameters>$(find arm_description)/config/arm_controllers.yaml</parameters>
+    </plugin>
+  </gazebo>
 
 </robot>
