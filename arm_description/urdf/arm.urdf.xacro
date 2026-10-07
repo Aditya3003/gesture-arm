@@ -3,25 +3,25 @@
 
   <!-- ===== PROPERTIES ===== -->
   <!-- Arm -->
-  <xacro:property name="segment_length" value="1.3"/>   <!-- distance between two joints -->
-  <xacro:property name="link_length"    value="1.0"/>   <!-- length of each cylinder -->
-  <xacro:property name="link_radius"    value="0.1"/>
-  <xacro:property name="joint_radius"   value="0.2"/>   <!-- sphere at each joint -->
-  <xacro:property name="joint_limit"    value="1.3"/>   <!-- rad, symmetric: -limit to +limit -->
-  <xacro:property name="joint_effort"   value="10"/>
-  <xacro:property name="joint_velocity" value="1"/>
+<xacro:property name="segment_length" value="0.3"/>
+<xacro:property name="link_length"    value="0.23"/>
+<xacro:property name="link_radius"    value="0.025"/>
+<xacro:property name="joint_radius"   value="0.045"/>
+<xacro:property name="joint_limit"    value="1.3"/>
+<xacro:property name="joint_effort"   value="10"/>
+<xacro:property name="joint_velocity" value="1"/>
 
-  <!-- Gripper -->
-  <xacro:property name="hand_offset"     value="1.1"/>  <!-- hand position along link3 -->
-  <xacro:property name="hand_x"          value="0.2"/>
-  <xacro:property name="hand_y"          value="0.5"/>
-  <xacro:property name="hand_z"          value="0.2"/>
-  <xacro:property name="finger_x"        value="0.1"/>
-  <xacro:property name="finger_y"        value="0.1"/>
-  <xacro:property name="finger_z"        value="0.4"/>
-  <xacro:property name="finger_spacing"  value="0.18"/> <!-- distance of each finger from the center -->
-  <xacro:property name="finger_height"   value="0.3"/>
-  <xacro:property name="finger_travel"   value="0.13"/> <!-- how far each finger closes -->
+<!-- Gripper -->
+<xacro:property name="hand_offset"     value="0.25"/>
+<xacro:property name="hand_x"          value="0.045"/>
+<xacro:property name="hand_y"          value="0.12"/>
+<xacro:property name="hand_z"          value="0.045"/>
+<xacro:property name="finger_x"        value="0.025"/>
+<xacro:property name="finger_y"        value="0.025"/>
+<xacro:property name="finger_z"        value="0.09"/>
+<xacro:property name="finger_spacing"  value="0.04"/>
+<xacro:property name="finger_height"   value="0.07"/>
+<xacro:property name="finger_travel"   value="0.027"/>
 
   <!-- ===== MATERIALS ===== -->
   <material name="black">
@@ -33,7 +33,7 @@
 
   <!-- ===== MACROS ===== -->
   <!-- One arm segment: a cylinder, an optional sphere at its top, and the revolute joint that drives it -->
-  <xacro:macro name="arm_segment" params="index parent joint_z top_sphere">
+  <xacro:macro name="arm_segment" params="index parent joint_z top_sphere axis">
     <link name="link${index}">
       <visual>
         <geometry>
@@ -57,7 +57,7 @@
       <parent link="${parent}"/>
       <child link="link${index}"/>
       <origin xyz="0 0 ${joint_z}" rpy="0 0 0"/>
-      <axis xyz="0 1 0"/>
+      <axis xyz="${axis}"/>
       <limit lower="${-joint_limit}" upper="${joint_limit}" effort="${joint_effort}" velocity="${joint_velocity}"/>
     </joint>
   </xacro:macro>
@@ -93,9 +93,9 @@
     </visual>
   </link>
 
-  <xacro:arm_segment index="1" parent="base_link" joint_z="0"                 top_sphere="true"/>
-  <xacro:arm_segment index="2" parent="link1"     joint_z="${segment_length}" top_sphere="true"/>
-  <xacro:arm_segment index="3" parent="link2"     joint_z="${segment_length}" top_sphere="false"/>
+  <xacro:arm_segment index="1" parent="base_link" joint_z="0"                 top_sphere="true" axis="0 0 1"/>
+  <xacro:arm_segment index="2" parent="link1"     joint_z="${segment_length}" top_sphere="true" axis="0 1 0"/>
+  <xacro:arm_segment index="3" parent="link2"     joint_z="${segment_length}" top_sphere="false" axis="0 1 0"/>
 
   <link name="gripper_hand">
     <visual>
