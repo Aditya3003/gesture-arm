@@ -15,8 +15,8 @@ setup(
     zip_safe=True,
     maintainer='kskaditya',
     maintainer_email='kskaditya3@gmail.com',
-    description='TODO: Package description',
-    license='TODO: License declaration',
+    description='Demo node that sends joint trajectory commands to the arm',
+    license='MIT',
     extras_require={
         'test': [
             'pytest',

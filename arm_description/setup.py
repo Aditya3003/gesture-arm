@@ -20,8 +20,8 @@ setup(
     zip_safe=True,
     maintainer='kskaditya',
     maintainer_email='kskaditya3@gmail.com',
-    description='TODO: Package description',
-    license='TODO: License declaration',
+    description='3-axis robot arm model (URDF/xacro), ros2_control config and Gazebo launch file',
+    license='MIT',
     extras_require={
         'test': [
             'pytest',
