@@ -26,12 +26,23 @@
   <!-- Masses (kg) -->
   <xacro:property name="base_mass"   value="1.0"/>
   <xacro:property name="link_mass"   value="0.3"/>
+  <xacro:property name="sphere_mass" value="0.1"/>
   <xacro:property name="hand_mass"   value="0.1"/>
   <xacro:property name="finger_mass" value="0.05"/>
 
-  <!-- ===== MATERIALS ===== -->
+  <!-- Gazebo colors -->
+  <xacro:property name="arm_color"    value="Gazebo/Orange"/>
+  <xacro:property name="joint_color"  value="Gazebo/Black"/>
+  <xacro:property name="base_color"   value="Gazebo/DarkGrey"/>
+  <xacro:property name="hand_color"   value="Gazebo/Black"/>
+  <xacro:property name="finger_color" value="Gazebo/White"/>
+
+  <!-- ===== MATERIALS (RViz colors) ===== -->
   <material name="black">
     <color rgba="0 0 0 1"/>
+  </material>
+  <material name="orange">
+    <color rgba="1 0.5 0 1"/>
   </material>
   <material name="white">
     <color rgba="1 1 1 1"/>
@@ -68,7 +79,7 @@
     </inertial>
   </xacro:macro>
 
-  <!-- ===== ARM SEGMENT MACRO: cylinder, optional top sphere, and its revolute joint ===== -->
+  <!-- ===== ARM SEGMENT MACRO: cylinder link, its revolute joint, and an optional joint sphere on top ===== -->
   <xacro:macro name="arm_segment" params="index parent joint_z top_sphere axis">
     <link name="link${index}">
       <visual>
@@ -76,7 +87,7 @@
           <cylinder length="${link_length}" radius="${link_radius}"/>
         </geometry>
         <origin xyz="0 0 ${segment_length/2}" rpy="0 0 0"/>
-        <material name="white"/>
+        <material name="orange"/>
       </visual>
       <collision>
         <geometry>
@@ -84,23 +95,6 @@
         </geometry>
         <origin xyz="0 0 ${segment_length/2}" rpy="0 0 0"/>
       </collision>
-
-      <xacro:if value="${top_sphere}">
-        <visual>
-          <geometry>
-            <sphere radius="${joint_radius}"/>
-          </geometry>
-          <origin xyz="0 0 ${segment_length}" rpy="0 0 0"/>
-          <material name="black"/>
-        </visual>
-        <collision>
-          <geometry>
-            <sphere radius="${joint_radius}"/>
-          </geometry>
-          <origin xyz="0 0 ${segment_length}" rpy="0 0 0"/>
-        </collision>
-      </xacro:if>
-
       <xacro:inertial_cylinder mass="${link_mass}" r="${link_radius}" h="${link_length}" xyz="0 0 ${segment_length/2}"/>
     </link>
 
@@ -111,6 +105,41 @@
       <axis xyz="${axis}"/>
       <limit lower="${-joint_limit}" upper="${joint_limit}" effort="${joint_effort}" velocity="${joint_velocity}"/>
     </joint>
+
+    <gazebo reference="link${index}">
+      <material>${arm_color}</material>
+    </gazebo>
+
+    <!-- Joint sphere: separate link so it can have its own color -->
+    <xacro:if value="${top_sphere}">
+      <link name="link${index}_sphere">
+        <visual>
+          <geometry>
+            <sphere radius="${joint_radius}"/>
+          </geometry>
+          <material name="black"/>
+        </visual>
+        <collision>
+          <geometry>
+            <sphere radius="${joint_radius}"/>
+          </geometry>
+        </collision>
+        <xacro:inertial_sphere mass="${sphere_mass}" r="${joint_radius}" xyz="0 0 0"/>
+      </link>
+
+      <joint name="link${index}_to_sphere" type="fixed">
+        <parent link="link${index}"/>
+        <child link="link${index}_sphere"/>
+        <origin xyz="0 0 ${segment_length}" rpy="0 0 0"/>
+      </joint>
+
+      <gazebo reference="link${index}_sphere">
+        <material>${joint_color}</material>
+      </gazebo>
+      <gazebo reference="link${index}_to_sphere">
+        <preserveFixedJoint>true</preserveFixedJoint>
+      </gazebo>
+    </xacro:if>
   </xacro:macro>
 
   <!-- ===== FINGER MACRO. reflect = 1 for left, -1 for right ===== -->
@@ -139,6 +168,10 @@
       <axis xyz="0 ${-reflect} 0"/>
       <limit lower="0" upper="${finger_travel}" effort="${joint_effort}" velocity="${joint_velocity}"/>
     </joint>
+
+    <gazebo reference="gripper_finger_${side}">
+      <material>${finger_color}</material>
+    </gazebo>
   </xacro:macro>
 
   <!-- ===== ROS 2 CONTROL JOINT MACRO ===== -->
@@ -169,7 +202,11 @@
     <xacro:inertial_sphere mass="${base_mass}" r="${joint_radius}" xyz="0 0 0"/>
   </link>
 
-  <!-- Lifted by the sphere's radius so the base sits on the ground instead of half inside it -->
+  <gazebo reference="base_link">
+    <material>${base_color}</material>
+  </gazebo>
+
+  <!-- Lifted by the sphere's radius so the base sits on the ground -->
   <joint name="world_to_base" type="fixed">
     <parent link="world"/>
     <child link="base_link"/>
@@ -196,6 +233,10 @@
     </collision>
     <xacro:inertial_box mass="${hand_mass}" x="${hand_x}" y="${hand_y}" z="${hand_z}" xyz="0 0 ${hand_z/2}"/>
   </link>
+
+  <gazebo reference="gripper_hand">
+    <material>${hand_color}</material>
+  </gazebo>
 
   <joint name="gripper_joint" type="fixed">
     <parent link="link3"/>
