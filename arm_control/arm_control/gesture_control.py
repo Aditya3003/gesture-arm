@@ -6,18 +6,29 @@ from rclpy.node import Node
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from builtin_interfaces.msg import Duration
 
-# ===== Tuning values =====
-X_MIN, X_MAX = 0.2, 0.8          # comfortable hand range in the image (0..1)
-Y_MIN, Y_MAX = 0.2, 0.8
-CLOSE_BELOW = 1.0                # openness below this: close gripper
-OPEN_ABOVE = 1.4                 # openness above this: open gripper
-JOINT1_RANGE = (1.2, -1.2)       # base rotation: hand at left edge -> right edge
-JOINT2_RANGE = (0.0, 1.2)        # bend: hand at top -> bottom
-JOINT3_RANGE = (0.0, 1.2)
-GRIPPER_OPEN, GRIPPER_CLOSED = 0.0, 0.009
-SMOOTHING = 0.3                  # 0..1: lower = smoother but slower to react
-RATE_HZ = 15                     # camera frames processed per second
-MOVE_TIME = 0.3                  # seconds the controller gets to reach each target
+# ===== Arm geometry (must match the URDF) =====
+SHOULDER_HEIGHT = 0.345   # height of joint2 above the ground: base radius 0.045 + segment 0.3
+LINK_A = 0.3              # joint2 -> joint3
+LINK_B = 0.32             # joint3 -> middle of the fingers (hand_offset 0.25 + finger_height 0.07)
+JOINT_LIMIT = 1.3
+
+# ===== Hand -> target mapping =====
+X_MIN, X_MAX = 0.2, 0.8            # hand left/right in the image
+Y_MIN, Y_MAX = 0.2, 0.8            # hand up/down in the image
+SIZE_MIN, SIZE_MAX = 0.08, 0.20    # hand size in the image: far from camera -> close to camera
+JOINT1_RANGE = (-1.2, 1.2)         # base rotation: hand left -> right
+HEIGHT_RANGE = (0.8, 0.3)         # gripper height (m): hand at top -> bottom
+REACH_RANGE = (0.25, 0.55)         # gripper reach (m): hand far -> close to camera
+
+# ===== Gripper =====
+CLOSE_BELOW = 1.0
+OPEN_ABOVE = 1.4
+GRIPPER_OPEN, GRIPPER_CLOSED = 0.0, 0.027   # effort control: fully closed, stops on contact
+
+# ===== Behaviour =====
+SMOOTHING = 0.3
+RATE_HZ = 15
+MOVE_TIME = 0.3
 
 ARM_JOINTS = ['joint1', 'joint2', 'joint3']
 GRIPPER_JOINTS = ['gripper_finger_left_joint', 'gripper_finger_right_joint']
@@ -31,10 +42,34 @@ def distance(a, b):
 
 
 def scale(value, in_min, in_max, out_start, out_end):
-    """Map value from [in_min, in_max] to [out_start, out_end], clamped to that range."""
+    """Map value from [in_min, in_max] to [out_start, out_end], clamped."""
     t = (value - in_min) / (in_max - in_min)
     t = max(0.0, min(1.0, t))
     return out_start + t * (out_end - out_start)
+
+
+def clamp(value, low, high):
+    return max(low, min(high, value))
+
+
+def inverse_kinematics(reach, height):
+    """Joint2 and joint3 angles that put the gripper at (reach, height).
+    Angles are measured from vertical; positive bends forward."""
+    dx = reach
+    dz = height - SHOULDER_HEIGHT
+    d = math.hypot(dx, dz)
+    d = clamp(d, abs(LINK_A - LINK_B) + 0.01, LINK_A + LINK_B - 0.01)  # keep the target reachable
+
+    # Elbow angle from the law of cosines
+    cos_q3 = (d * d - LINK_A ** 2 - LINK_B ** 2) / (2 * LINK_A * LINK_B)
+    q3 = math.acos(clamp(cos_q3, -1.0, 1.0))
+
+    # Shoulder angle: direction to the target, minus the offset caused by the bent elbow
+    direction = math.atan2(dx, dz)
+    offset = math.atan2(LINK_B * math.sin(q3), LINK_A + LINK_B * math.cos(q3))
+    q2 = direction - offset
+
+    return clamp(q2, -JOINT_LIMIT, JOINT_LIMIT), clamp(q3, -JOINT_LIMIT, JOINT_LIMIT)
 
 
 def make_trajectory(joints, positions, seconds):
@@ -59,7 +94,7 @@ class GestureControl(Node):
                                     min_detection_confidence=0.7,
                                     min_tracking_confidence=0.5)
 
-        self.arm = None                 # smoothed joint angles
+        self.arm = None
         self.gripper = GRIPPER_OPEN
 
         self.timer = self.create_timer(1.0 / RATE_HZ, self.update)
@@ -83,14 +118,14 @@ class GestureControl(Node):
             hand_size = distance(lm[0], lm[9])
             openness = sum(distance(lm[0], lm[t]) for t in [8, 12, 16, 20]) / 4 / hand_size
 
-            # Hand position -> target joint angles
-            target = [
-                scale(palm.x, X_MIN, X_MAX, *JOINT1_RANGE),
-                scale(palm.y, Y_MIN, Y_MAX, *JOINT2_RANGE),
-                scale(palm.y, Y_MIN, Y_MAX, *JOINT3_RANGE),
-            ]
+            # Hand -> gripper target (base angle, reach, height) -> joint angles
+            joint1 = scale(palm.x, X_MIN, X_MAX, *JOINT1_RANGE)
+            height = scale(palm.y, Y_MIN, Y_MAX, *HEIGHT_RANGE)
+            reach = scale(hand_size, SIZE_MIN, SIZE_MAX, *REACH_RANGE)
+            joint2, joint3 = inverse_kinematics(reach, height)
+            target = [joint1, joint2, joint3]
 
-            # Smoothing: move only part of the way towards the new target each frame
+            # Smoothing
             if self.arm is None:
                 self.arm = target
             else:
@@ -106,9 +141,10 @@ class GestureControl(Node):
             self.gripper_pub.publish(make_trajectory(GRIPPER_JOINTS, [self.gripper, self.gripper], MOVE_TIME))
 
             state = 'CLOSED' if self.gripper == GRIPPER_CLOSED else 'OPEN'
-            text = f'x={palm.x:.2f} y={palm.y:.2f} open={openness:.2f} gripper={state}'
-            cv2.putText(frame, text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-        # No hand detected: publish nothing, so the arm holds its last position
+            line1 = f'size={hand_size:.2f} open={openness:.2f} gripper={state}'
+            line2 = f'reach={reach:.2f}m height={height:.2f}m'
+            cv2.putText(frame, line1, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            cv2.putText(frame, line2, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
         cv2.imshow('Gesture control', frame)
         cv2.waitKey(1)

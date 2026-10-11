@@ -22,6 +22,7 @@
   <xacro:property name="finger_spacing"  value="0.04"/>
   <xacro:property name="finger_height"   value="0.07"/>
   <xacro:property name="finger_travel"   value="0.027"/>
+  <xacro:property name="finger_effort"   value="5"/>     <!-- max finger force in N -->
 
   <!-- Masses (kg) -->
   <xacro:property name="base_mass"   value="1.0"/>
@@ -136,6 +137,8 @@
       <gazebo reference="link${index}_sphere">
         <material>${joint_color}</material>
       </gazebo>
+
+      <!-- Stop Gazebo from merging the sphere into its parent link (keeps its color) -->
       <gazebo reference="link${index}_to_sphere">
         <preserveFixedJoint>true</preserveFixedJoint>
       </gazebo>
@@ -166,9 +169,10 @@
       <child link="gripper_finger_${side}"/>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <axis xyz="0 ${-reflect} 0"/>
-      <limit lower="0" upper="${finger_travel}" effort="${joint_effort}" velocity="${joint_velocity}"/>
+      <limit lower="0" upper="${finger_travel}" effort="${finger_effort}" velocity="${joint_velocity}"/>
     </joint>
 
+    <!-- Color and high-friction contact, so the fingers can grip -->
     <gazebo reference="gripper_finger_${side}">
       <material>${finger_color}</material>
       <mu1>2.0</mu1>
@@ -180,10 +184,20 @@
     </gazebo>
   </xacro:macro>
 
-  <!-- ===== ROS 2 CONTROL JOINT MACRO ===== -->
+  <!-- ===== ROS 2 CONTROL JOINT MACROS ===== -->
+  <!-- Position-controlled joint (arm) -->
   <xacro:macro name="control_joint" params="name">
     <joint name="${name}">
       <command_interface name="position"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+  </xacro:macro>
+
+  <!-- Effort-controlled joint (gripper fingers): limited force, stops on contact -->
+  <xacro:macro name="control_joint_effort" params="name">
+    <joint name="${name}">
+      <command_interface name="effort"/>
       <state_interface name="position"/>
       <state_interface name="velocity"/>
     </joint>
