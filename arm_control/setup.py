@@ -25,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
             'demo = arm_control.demo:main',
+            'gesture_control = arm_control.gesture_control:main',
         ],
     },
 )
