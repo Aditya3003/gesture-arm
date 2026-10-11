@@ -17,11 +17,13 @@ def generate_launch_description():
     xacro_file = os.path.join(pkg_share, 'urdf', 'arm.urdf.xacro')
     robot_description = re.sub(r'<!--.*?-->', '', xacro.process_file(xacro_file).toxml(), flags=re.DOTALL)
 
-    # 1. Gazebo
+    # 1. Gazebo, with our world (table and cube)
+    world_file = os.path.join(pkg_share, 'worlds', 'pick_world.world')
     gazebo = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(get_package_share_directory('gazebo_ros'), 'launch', 'gazebo.launch.py')
-        )
+        ),
+        launch_arguments={'world': world_file}.items(),
     )
 
     # 2. Robot State Publisher

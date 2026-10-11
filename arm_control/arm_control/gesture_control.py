@@ -14,7 +14,7 @@ OPEN_ABOVE = 1.4                 # openness above this: open gripper
 JOINT1_RANGE = (1.2, -1.2)       # base rotation: hand at left edge -> right edge
 JOINT2_RANGE = (0.0, 1.2)        # bend: hand at top -> bottom
 JOINT3_RANGE = (0.0, 1.2)
-GRIPPER_OPEN, GRIPPER_CLOSED = 0.0, 0.027
+GRIPPER_OPEN, GRIPPER_CLOSED = 0.0, 0.009
 SMOOTHING = 0.3                  # 0..1: lower = smoother but slower to react
 RATE_HZ = 15                     # camera frames processed per second
 MOVE_TIME = 0.3                  # seconds the controller gets to reach each target
