@@ -13,18 +13,27 @@ def generate_launch_description():
     package_name = 'arm_description'
     pkg_share = get_package_share_directory(package_name)
 
-    # Process xacro and strip XML comments (they break gazebo_ros2_control)
+    # Process xacro and strip XML comments
     xacro_file = os.path.join(pkg_share, 'urdf', 'arm.urdf.xacro')
     robot_description = re.sub(r'<!--.*?-->', '', xacro.process_file(xacro_file).toxml(), flags=re.DOTALL)
 
-    # 1. Gazebo
+    # 1. Gazebo (new Gazebo). -r starts the simulation immediately, empty.sdf is an empty world
     gazebo = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(get_package_share_directory('gazebo_ros'), 'launch', 'gazebo.launch.py')
-        )
+            os.path.join(get_package_share_directory('ros_gz_sim'), 'launch', 'gz_sim.launch.py')
+        ),
+        launch_arguments={'gz_args': '-r empty.sdf'}.items(),
     )
-    
-    # 2. Robot State Publisher
+
+    # 2. Clock bridge: passes Gazebo's simulation time to ROS 2 (needed for use_sim_time)
+    clock_bridge = Node(
+        package='ros_gz_bridge',
+        executable='parameter_bridge',
+        arguments=['/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock'],
+        output='screen',
+    )
+
+    # 3. Robot State Publisher
     robot_state_publisher = Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
@@ -32,15 +41,15 @@ def generate_launch_description():
         parameters=[{'robot_description': robot_description, 'use_sim_time': True}],
     )
 
-    # 3. Spawn the arm
+    # 4. Spawn the arm from the /robot_description topic
     spawn_robot = Node(
-        package='gazebo_ros',
-        executable='spawn_entity.py',
-        arguments=['-topic', 'robot_description', '-entity', 'gesture_arm', '-timeout', '120'],
+        package='ros_gz_sim',
+        executable='create',
+        arguments=['-topic', 'robot_description', '-name', 'gesture_arm'],
         output='screen',
     )
 
-    # 4-6. Controllers
+    # 5-7. Controllers (unchanged)
     joint_state_broadcaster = Node(
         package='controller_manager',
         executable='spawner',
@@ -64,6 +73,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         gazebo,
+        clock_bridge,
         robot_state_publisher,
         spawn_robot,
         RegisterEventHandler(OnProcessExit(target_action=spawn_robot, on_exit=[joint_state_broadcaster])),

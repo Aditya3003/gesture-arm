@@ -22,7 +22,6 @@
   <xacro:property name="finger_spacing"  value="0.04"/>
   <xacro:property name="finger_height"   value="0.07"/>
   <xacro:property name="finger_travel"   value="0.027"/>
-  <xacro:property name="finger_effort"   value="5"/>     <!-- max finger force in N -->
 
   <!-- Masses (kg) -->
   <xacro:property name="base_mass"   value="1.0"/>
@@ -31,16 +30,9 @@
   <xacro:property name="hand_mass"   value="0.1"/>
   <xacro:property name="finger_mass" value="0.05"/>
 
-  <!-- Gazebo colors -->
-  <xacro:property name="arm_color"    value="Gazebo/Orange"/>
-  <xacro:property name="joint_color"  value="Gazebo/Black"/>
-  <xacro:property name="base_color"   value="Gazebo/DarkGrey"/>
-  <xacro:property name="hand_color"   value="Gazebo/Black"/>
-  <xacro:property name="finger_color" value="Gazebo/White"/>
-
-  <!-- ===== MATERIALS (RViz colors) ===== -->
+  <!-- ===== MATERIALS (used by both RViz and the new Gazebo) ===== -->
   <material name="black">
-    <color rgba="0 0 0 1"/>
+    <color rgba="0.05 0.05 0.05 1"/>
   </material>
   <material name="orange">
     <color rgba="1 0.5 0 1"/>
@@ -107,11 +99,7 @@
       <limit lower="${-joint_limit}" upper="${joint_limit}" effort="${joint_effort}" velocity="${joint_velocity}"/>
     </joint>
 
-    <gazebo reference="link${index}">
-      <material>${arm_color}</material>
-    </gazebo>
-
-    <!-- Joint sphere: separate link so it can have its own color -->
+    <!-- Joint sphere -->
     <xacro:if value="${top_sphere}">
       <link name="link${index}_sphere">
         <visual>
@@ -133,15 +121,6 @@
         <child link="link${index}_sphere"/>
         <origin xyz="0 0 ${segment_length}" rpy="0 0 0"/>
       </joint>
-
-      <gazebo reference="link${index}_sphere">
-        <material>${joint_color}</material>
-      </gazebo>
-
-      <!-- Stop Gazebo from merging the sphere into its parent link (keeps its color) -->
-      <gazebo reference="link${index}_to_sphere">
-        <preserveFixedJoint>true</preserveFixedJoint>
-      </gazebo>
     </xacro:if>
   </xacro:macro>
 
@@ -169,35 +148,14 @@
       <child link="gripper_finger_${side}"/>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <axis xyz="0 ${-reflect} 0"/>
-      <limit lower="0" upper="${finger_travel}" effort="${finger_effort}" velocity="${joint_velocity}"/>
+      <limit lower="0" upper="${finger_travel}" effort="${joint_effort}" velocity="${joint_velocity}"/>
     </joint>
-
-    <!-- Color and high-friction contact, so the fingers can grip -->
-    <gazebo reference="gripper_finger_${side}">
-      <material>${finger_color}</material>
-      <mu1>2.0</mu1>
-      <mu2>2.0</mu2>
-      <kp>1000000.0</kp>
-      <kd>100.0</kd>
-      <minDepth>0.001</minDepth>
-      <maxVel>0.1</maxVel>
-    </gazebo>
   </xacro:macro>
 
-  <!-- ===== ROS 2 CONTROL JOINT MACROS ===== -->
-  <!-- Position-controlled joint (arm) -->
+  <!-- ===== ROS 2 CONTROL JOINT MACRO ===== -->
   <xacro:macro name="control_joint" params="name">
     <joint name="${name}">
       <command_interface name="position"/>
-      <state_interface name="position"/>
-      <state_interface name="velocity"/>
-    </joint>
-  </xacro:macro>
-
-  <!-- Effort-controlled joint (gripper fingers): limited force, stops on contact -->
-  <xacro:macro name="control_joint_effort" params="name">
-    <joint name="${name}">
-      <command_interface name="effort"/>
       <state_interface name="position"/>
       <state_interface name="velocity"/>
     </joint>
@@ -221,10 +179,6 @@
     </collision>
     <xacro:inertial_sphere mass="${base_mass}" r="${joint_radius}" xyz="0 0 0"/>
   </link>
-
-  <gazebo reference="base_link">
-    <material>${base_color}</material>
-  </gazebo>
 
   <!-- Lifted by the sphere's radius so the base sits on the ground -->
   <joint name="world_to_base" type="fixed">
@@ -254,10 +208,6 @@
     <xacro:inertial_box mass="${hand_mass}" x="${hand_x}" y="${hand_y}" z="${hand_z}" xyz="0 0 ${hand_z/2}"/>
   </link>
 
-  <gazebo reference="gripper_hand">
-    <material>${hand_color}</material>
-  </gazebo>
-
   <joint name="gripper_joint" type="fixed">
     <parent link="link3"/>
     <child link="gripper_hand"/>
@@ -267,10 +217,10 @@
   <xacro:finger side="left"  reflect="1"/>
   <xacro:finger side="right" reflect="-1"/>
 
-  <!-- ===== ROS 2 CONTROL ===== -->
-  <ros2_control name="GazeboSystem" type="system">
+  <!-- ===== ROS 2 CONTROL (new Gazebo) ===== -->
+  <ros2_control name="GazeboSimSystem" type="system">
     <hardware>
-      <plugin>gazebo_ros2_control/GazeboSystem</plugin>
+      <plugin>gz_ros2_control/GazeboSimSystem</plugin>
     </hardware>
     <xacro:control_joint name="joint1"/>
     <xacro:control_joint name="joint2"/>
@@ -280,7 +230,7 @@
   </ros2_control>
 
   <gazebo>
-    <plugin filename="libgazebo_ros2_control.so" name="gazebo_ros2_control">
+    <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
       <parameters>$(find arm_description)/config/arm_controllers.yaml</parameters>
     </plugin>
   </gazebo>
